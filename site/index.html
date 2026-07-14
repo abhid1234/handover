@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>handover — the boarding pass for AI agents, live in your browser</title>
+<meta name="description" content="handover: the open handoff-packet format that lets one AI agent resume another's in-progress work. Build a packet, watch the real completeness / resume / diff library score it live, and hand it off A → B.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%AB%3C/text%3E%3C/svg%3E">
+<style>
+  :root{
+    --plum:#241633; --plum2:#2c1b3f; --plum3:#37244d; --raise:#3f2a56;
+    --line:#4a2f63; --line2:#5b3b78;
+    --ink:#f4ecf7; --ink2:#c6b2d6; --faint:#93789f;
+    --coral:#ff5c8a; --coral2:#e0417a; --coralsoft:#3a1830;
+    --mint:#5eead4; --mint2:#12b886; --mintsoft:#123a34;
+    --amber:#e8a13a; --ambersoft:#3a2c12;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{overflow-x:hidden}
+  body{margin:0;color:var(--ink);min-height:100vh;
+    background:
+      radial-gradient(1100px 620px at 20% -8%,#341f4b,var(--plum) 60%),
+      radial-gradient(900px 600px at 100% 0%,#3a1a37 0%,transparent 55%);
+    background-color:var(--plum);
+    font-family:var(--serif);
+    -webkit-font-smoothing:antialiased;}
+  .mono{font-family:var(--mono);}
+  .wrap{max-width:1180px;margin:0 auto;padding:40px 22px 100px}
+  a{color:var(--coral);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ---------- header ---------- */
+  header{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .mk{width:46px;height:34px;border-radius:7px;position:relative;flex:0 0 auto;
+    background:linear-gradient(135deg,var(--coral),var(--coral2));
+    box-shadow:0 6px 22px -8px var(--coral2);}
+  .mk::before{content:"";position:absolute;top:5px;bottom:5px;right:13px;width:0;
+    border-left:2px dashed rgba(36,22,51,.55);}
+  .mk::after{content:"";position:absolute;right:9px;top:50%;width:8px;height:8px;border-radius:50%;
+    transform:translateY(-50%);background:var(--plum);}
+  h1{font-size:30px;font-weight:600;letter-spacing:-.4px;margin:0;font-family:var(--serif)}
+  .tag{font-family:var(--mono);font-size:11.5px;color:var(--coral);letter-spacing:2px;text-transform:uppercase}
+  .top-links{margin-left:auto;display:flex;gap:18px;font-family:var(--mono);font-size:13px}
+  .lead{color:var(--ink2);font-size:18.5px;line-height:1.6;margin:22px 0 4px;max-width:840px;font-family:var(--serif)}
+  .lead b{color:var(--ink);font-weight:600}
+  .lead .k{font-family:var(--mono);font-size:15px;color:var(--coral)}
+
+  /* ---------- generic panel ---------- */
+  .panel{position:relative;background:var(--plum2);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .panel::after{content:"";position:absolute;top:0;left:0;width:100%;height:3px;
+    background:linear-gradient(90deg,var(--coral),var(--coral2));opacity:.85}
+  .phead{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);
+    display:flex;align-items:center;gap:9px}
+  .phead .dot{width:7px;height:7px;border-radius:50%;background:var(--coral)}
+
+  /* ---------- workbench grid ---------- */
+  .bench{display:grid;grid-template-columns:1.05fr .95fr;gap:20px;margin-top:26px;align-items:start}
+  @media(max-width:900px){.bench{grid-template-columns:1fr}}
+
+  /* ---------- boarding-pass builder ---------- */
+  .builder{padding:22px 24px 26px}
+  .builder .pass-perf{position:absolute;top:14px;bottom:14px;left:0;width:16px;pointer-events:none}
+  .fld{margin-top:16px}
+  .fld:first-of-type{margin-top:14px}
+  .fl{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+  .fl .name{font-family:var(--mono);font-size:13.5px;color:var(--ink);font-weight:600}
+  .fl .req{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;padding:2px 7px;border-radius:20px;
+    background:var(--coral2);color:#fff;font-weight:700}
+  .fl .opt{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-left:auto}
+  .fl .hint{font-size:12px;color:var(--faint);font-family:var(--serif)}
+  input.tin,textarea.tin,.linput{width:100%;background:var(--plum);border:1px solid var(--line);border-radius:9px;
+    color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px;line-height:1.45;outline:none;transition:.15s}
+  input.tin:focus,textarea.tin:focus,.linput:focus{border-color:var(--coral);box-shadow:0 0 0 3px rgba(255,92,138,.14)}
+  textarea.tin{resize:vertical;min-height:64px}
+  .lrow,.arow{display:flex;gap:8px;margin-bottom:7px;align-items:center}
+  .arow{flex-wrap:wrap}
+  .arow .linput.path{flex:1 1 240px}
+  .arow .linput.note{flex:1 1 160px}
+  .lrow .linput{flex:1}
+  .del{flex:0 0 auto;width:30px;height:30px;border-radius:8px;border:1px solid var(--line);
+    background:var(--plum3);color:var(--faint);font-size:17px;line-height:1;cursor:pointer;transition:.15s}
+  .del:hover{border-color:var(--coral);color:var(--coral);background:var(--coralsoft)}
+  .addbtn{margin-top:2px;background:transparent;border:1px dashed var(--line2);color:var(--ink2);
+    font-family:var(--mono);font-size:12px;padding:7px 13px;border-radius:8px;cursor:pointer;transition:.15s}
+  .addbtn:hover{border-color:var(--coral);color:var(--coral)}
+  .statebox{background:var(--plum);border:1px solid var(--line);border-radius:9px;padding:9px 11px;
+    font-family:var(--mono);font-size:12px;color:var(--ink2);line-height:1.7}
+  .statebox .sk{color:var(--coral)}
+
+  /* ---------- right rail ---------- */
+  .rail{display:flex;flex-direction:column;gap:20px}
+
+  /* gauge */
+  .gauge{padding:20px 22px}
+  .gaugetop{display:flex;gap:20px;align-items:center}
+  .ring{flex:0 0 auto;position:relative;width:132px;height:132px}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .rtrack{stroke:var(--plum3)}
+  .ring .rbar{stroke:var(--mint);transition:stroke-dashoffset .6s cubic-bezier(.22,1,.36,1),stroke .4s}
+  .ring .rlabel{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .ring .pct{font-family:var(--serif);font-size:34px;font-weight:600;line-height:1}
+  .ring .sub{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:3px}
+  .seclist{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+  .secrow{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;padding:2px 0}
+  .secrow .ic{width:15px;height:15px;flex:0 0 auto}
+  .secrow .snm{color:var(--ink2)}
+  .secrow .stt{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.06em}
+  .secrow.pres .stt{color:var(--mint)}
+  .secrow.miss .snm{color:var(--faint)}
+  .secrow.miss .stt{color:var(--amber)}
+  .warns{margin-top:14px;border-top:1px dashed var(--line);padding-top:12px;display:flex;flex-direction:column;gap:7px}
+  .warns.empty{opacity:.6}
+  .warn{display:flex;gap:9px;align-items:flex-start;font-family:var(--mono);font-size:11.5px;color:var(--amber);line-height:1.45}
+  .warn .wic{flex:0 0 auto;margin-top:1px}
+  .warn.ok{color:var(--mint)}
+
+  /* briefing */
+  .brief{padding:20px 22px}
+  .briefdoc{margin-top:12px;background:var(--plum);border:1px solid var(--line);border-radius:11px;
+    padding:16px 18px;max-height:340px;overflow:auto;font-family:var(--serif);font-size:14.5px;line-height:1.6;color:var(--ink2)}
+  .briefdoc .md-h1{font-family:var(--serif);font-size:19px;font-weight:600;color:var(--ink);margin:2px 0 12px;
+    border-bottom:1px solid var(--line);padding-bottom:8px}
+  .briefdoc .md-h2{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--coral);margin:16px 0 6px}
+  .briefdoc p{margin:5px 0}
+  .briefdoc ul{margin:5px 0;padding-left:20px}
+  .briefdoc li{margin:3px 0}
+  .briefdoc code{font-family:var(--mono);font-size:12.5px;background:var(--plum3);color:var(--mint);
+    padding:1px 5px;border-radius:5px}
+  .briefdoc pre.cb{background:#180f24;border:1px solid var(--line);border-radius:8px;padding:11px 13px;overflow:auto;margin:8px 0}
+  .briefdoc pre.cb code{background:none;color:var(--ink2);padding:0;font-size:12px;line-height:1.6}
+  .briefdoc hr{border:none;border-top:1px dashed var(--line);margin:14px 0}
+  .briefdoc em{color:var(--faint);font-style:italic}
+  .briefdoc strong{color:var(--ink);font-weight:600}
+
+  /* ---------- handoff stage ---------- */
+  .handoff{margin-top:22px;padding:26px 24px 24px}
+  .ho-stage{position:relative;height:186px;margin-top:6px;border-radius:14px;
+    background:linear-gradient(180deg,rgba(255,255,255,.015),transparent);overflow:hidden}
+  .ho-agent{position:absolute;top:50%;transform:translateY(-50%);width:150px;text-align:center}
+  .ho-agent.A{left:2%}
+  .ho-agent.B{right:2%}
+  .avatar{width:64px;height:64px;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center}
+  .avatar svg{width:34px;height:34px}
+  .ho-agent.A .avatar{background:var(--mintsoft);border:2px solid var(--mint2);color:var(--mint)}
+  .ho-agent.B .avatar{background:var(--coralsoft);border:2px solid var(--coral2);color:var(--coral);transition:.4s}
+  .ho-agent.B.got .avatar{background:var(--mintsoft);border-color:var(--mint2);color:var(--mint);
+    box-shadow:0 0 26px -4px var(--mint2)}
+  .ho-agent .anm{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--ink)}
+  .ho-agent .arole{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:3px;line-height:1.4;min-height:26px}
+  .ho-gate{position:absolute;left:50%;top:10px;bottom:10px;transform:translateX(-50%);width:0;
+    border-left:2px dashed var(--line2);transition:.3s}
+  .ho-gate.flash{border-color:var(--coral);box-shadow:0 0 22px 0 var(--coral)}
+  .ho-gate .glab{position:absolute;bottom:-2px;left:50%;transform:translateX(-50%);white-space:nowrap;
+    font-family:var(--mono);font-size:10px;color:var(--faint)}
+
+  .baton{position:absolute;top:50%;left:12%;transform:translate(-50%,-50%) rotate(-7deg);
+    width:130px;z-index:4;transition:left 1s cubic-bezier(.66,0,.2,1),transform 1s cubic-bezier(.66,0,.2,1)}
+  .baton.passed{left:88%;transform:translate(-50%,-50%) rotate(6deg)}
+  .ticketmini{position:relative;background:var(--plum);border:1.6px solid var(--coral2);border-radius:9px;
+    padding:9px 11px;box-shadow:0 14px 30px -12px #000}
+  .ticketmini::after{content:"";position:absolute;top:6px;bottom:6px;right:34px;border-left:1.4px dashed var(--coral2);opacity:.7}
+  .ticketmini .tt{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--coral);font-weight:700}
+  .ticketmini .tid{font-family:var(--mono);font-size:9px;color:var(--ink2);margin-top:3px;word-break:break-all}
+  .ticketmini .tv{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:var(--mono);
+    font-size:10px;color:var(--faint)}
+  .stamp{position:absolute;top:-16px;right:-18px;transform:rotate(-12deg) scale(.4);opacity:0;
+    border:2.4px solid var(--coral);border-radius:8px;padding:4px 9px;background:rgba(255,92,138,.08);
+    transition:.5s cubic-bezier(.34,1.56,.64,1);pointer-events:none}
+  .stamp.on{opacity:1;transform:rotate(-12deg) scale(1)}
+  .stamp b{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--coral);font-weight:700}
+
+  .ho-ctl{display:flex;gap:14px;align-items:center;margin-top:18px;flex-wrap:wrap}
+  .btn{font-family:var(--mono);font-weight:600;font-size:14px;border:none;border-radius:10px;padding:12px 20px;cursor:pointer;transition:.15s}
+  .btn.primary{background:linear-gradient(135deg,var(--coral),var(--coral2));color:#fff;box-shadow:0 10px 26px -12px var(--coral2)}
+  .btn.primary:hover{filter:brightness(1.06)}
+  .btn.ghost{background:transparent;border:1px solid var(--line2);color:var(--ink2)}
+  .btn.ghost:hover{border-color:var(--coral);color:var(--coral)}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.4;cursor:default;transform:none}
+
+  .ho-brief{margin-top:18px;display:none}
+  .ho-brief.show{display:block;animation:rise .5s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .ho-brief .recvlab{font-family:var(--mono);font-size:11.5px;color:var(--mint);letter-spacing:.04em;margin-bottom:8px;
+    display:flex;align-items:center;gap:8px}
+
+  /* ---------- revise / diff ---------- */
+  .revise{margin-top:20px;padding:24px 24px 26px}
+  .diffwrap{margin-top:16px;display:none}
+  .diffwrap.show{display:block;animation:rise .5s ease}
+  .verbar{display:flex;align-items:center;gap:12px;font-family:var(--mono);font-size:13px;margin-bottom:14px}
+  .vchip{padding:4px 11px;border-radius:8px;border:1px solid var(--line);background:var(--plum);font-weight:600}
+  .vchip.v1{color:var(--ink2)}
+  .vchip.v2{color:var(--mint);border-color:var(--mint2)}
+  .verbar .arr{color:var(--coral)}
+  .verbar .vd{margin-left:auto;color:var(--faint)}
+  .diffgrid{display:flex;flex-direction:column;gap:14px}
+  .dcat .dlab{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+  .ditem{font-family:var(--mono);font-size:12.5px;line-height:1.5;padding:6px 11px;border-radius:8px;margin-bottom:5px;
+    display:flex;gap:9px;align-items:flex-start;border:1px solid transparent}
+  .ditem .sg{flex:0 0 auto;font-weight:700}
+  .ditem.good{background:var(--mintsoft);color:#8ff0dd;border-color:rgba(94,234,212,.25)}
+  .ditem.good .sg{color:var(--mint)}
+  .ditem.coral{background:var(--coralsoft);color:#ffb3ca;border-color:rgba(255,92,138,.22)}
+  .ditem.coral .sg{color:var(--coral)}
+  .ditem.warn{background:var(--ambersoft);color:#f0cd8f;border-color:rgba(232,161,58,.25)}
+  .ditem.warn .sg{color:var(--amber)}
+  .ditem.faint{background:var(--plum);color:var(--faint)}
+
+  /* ---------- json ---------- */
+  .jsonpanel{margin-top:20px;padding:20px 22px}
+  .idbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px;margin-bottom:12px}
+  .idchip{font-family:var(--mono);font-size:12px;padding:6px 11px;border-radius:8px;background:var(--plum);border:1px solid var(--line)}
+  .idchip .lab{color:var(--faint)}
+  .idchip .val{color:var(--coral);word-break:break-all}
+  .idchip.ver .val{color:var(--mint)}
+  .idchip.valid .val{color:var(--mint)}
+  .idchip.invalid .val{color:var(--amber)}
+  pre.json{margin:0;background:#180f24;border:1px solid var(--line);border-radius:11px;padding:16px 18px;
+    font-family:var(--mono);font-size:12px;line-height:1.65;color:#cbb9dd;overflow:auto;max-height:440px}
+  .jk{color:var(--coral)} .js{color:#9fe6d5} .jn{color:var(--amber)} .jb{color:#c79bff} .jp{color:var(--faint)}
+
+  .foot{color:var(--faint);font-family:var(--mono);font-size:12.5px;margin-top:44px;line-height:1.9;
+    border-top:1px solid var(--line);padding-top:22px}
+  .foot b{color:var(--ink2)}
+  .sectitle{font-family:var(--serif);font-size:22px;font-weight:600;margin:2px 0 2px;letter-spacing:-.3px}
+  .secsub{color:var(--ink2);font-size:14.5px;line-height:1.55;margin:6px 0 0;max-width:760px}
+  .secsub .k{font-family:var(--mono);font-size:13px;color:var(--coral)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mk"></div>
+    <div>
+      <h1>handover</h1>
+      <div class="tag">the boarding pass · real library, live</div>
+    </div>
+    <div class="top-links">
+      <a href="https://github.com/abhid1234/handover">github</a>
+      <a href="https://www.npmjs.com/package/@avee1234/handover">npm</a>
+    </div>
+  </header>
+
+  <p class="lead">When one agent's session ends, the working state evaporates — the goal, the decisions, the two files that matter. <b>handover</b> distills it into one portable JSON <b>packet</b> a fresh agent can be handed verbatim. Edit the packet below and watch the <span class="k">real</span> <span class="k">completeness()</span>, <span class="k">resume()</span> and <span class="k">diffPackets()</span> — copied straight from the published library — score it, brief it, and hand it off, all client-side.</p>
+
+  <!-- ============ WORKBENCH ============ -->
+  <div class="bench">
+    <!-- builder -->
+    <div class="panel builder">
+      <div class="phead"><span class="dot"></span> handover packet · editable boarding pass</div>
+
+      <div class="fld">
+        <div class="fl"><span class="name">goal</span><span class="req">REQUIRED</span><span class="hint">the task being handed off</span></div>
+        <input class="tin" id="f-goal" type="text">
+      </div>
+
+      <div class="fld">
+        <div class="fl"><span class="name">context</span><span class="opt">optional</span><span class="hint">constraints + decisions to respect</span></div>
+        <textarea class="tin" id="f-context"></textarea>
+      </div>
+
+      <div class="fld">
+        <div class="fl"><span class="name">progress[]</span><span class="opt">optional</span><span class="hint">what's already done</span></div>
+        <div id="f-progress"></div>
+      </div>
+
+      <div class="fld">
+        <div class="fl"><span class="name">state · <span class="mono" style="color:var(--coral)">key_files[]</span></span><span class="opt">optional</span><span class="hint">the files to open first</span></div>
+        <div id="f-keyfiles"></div>
+        <div class="statebox" style="margin-top:8px" id="statebox"></div>
+      </div>
+
+      <div class="fld">
+        <div class="fl"><span class="name">next_steps[]</span><span class="opt">optional</span><span class="hint">what to do next, in order</span></div>
+        <div id="f-next"></div>
+      </div>
+
+      <div class="fld">
+        <div class="fl"><span class="name">open_questions[]</span><span class="opt">optional</span><span class="hint">what's still unresolved</span></div>
+        <div id="f-questions"></div>
+      </div>
+
+      <div class="fld">
+        <div class="fl"><span class="name">artifacts[]</span><span class="opt">optional</span><span class="hint">files produced / touched</span></div>
+        <div id="f-artifacts"></div>
+      </div>
+    </div>
+
+    <!-- right rail: gauge + briefing -->
+    <div class="rail">
+      <div class="panel gauge">
+        <div class="phead"><span class="dot"></span> completeness() · live score</div>
+        <div class="gaugetop" style="margin-top:14px">
+          <div class="ring">
+            <svg width="132" height="132" viewBox="0 0 132 132">
+              <circle class="rtrack" cx="66" cy="66" r="54" fill="none" stroke-width="13"/>
+              <circle class="rbar" id="rbar" cx="66" cy="66" r="54" fill="none" stroke-width="13" stroke-linecap="round"/>
+            </svg>
+            <div class="rlabel"><div class="pct" id="pct">—</div><div class="sub" id="pctsub">0 / 7</div></div>
+          </div>
+          <div class="seclist" id="seclist"></div>
+        </div>
+        <div class="warns" id="warns"></div>
+      </div>
+
+      <div class="panel brief">
+        <div class="phead"><span class="dot"></span> resume() · the briefing a fresh agent reads</div>
+        <div class="briefdoc" id="briefdoc"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ HANDOFF ============ -->
+  <div style="margin-top:40px">
+    <div class="sectitle">Hand off · A → B across the gate</div>
+    <p class="secsub">The baton is a file. Agent&nbsp;A packs the packet and stops; agent&nbsp;B — a different model, harness, or machine — reads the <span class="k">resume()</span> briefing and runs. Press the button and watch the packet cross the filesystem gate.</p>
+  </div>
+  <div class="panel handoff">
+    <div class="ho-stage" id="hoStage">
+      <div class="ho-agent A">
+        <div class="avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11.5a4 4 0 100-8 4 4 0 000 8zM4.5 20a7.5 6.5 0 0115 0"/></svg></div>
+        <div class="anm">agent-A</div>
+        <div class="arole">claude-code<br>packs · stops</div>
+      </div>
+      <div class="ho-gate" id="hoGate"><span class="glab">the gate = a filesystem</span></div>
+      <div class="ho-agent B" id="agentB">
+        <div class="avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11.5a4 4 0 100-8 4 4 0 000 8zM4.5 20a7.5 6.5 0 0115 0"/></svg></div>
+        <div class="anm">agent-B</div>
+        <div class="arole" id="bRole">any harness<br>waiting…</div>
+      </div>
+      <div class="baton" id="baton">
+        <div class="ticketmini">
+          <div class="stamp" id="stamp"><b>HANDED OFF</b></div>
+          <div class="tt">PACKET</div>
+          <div class="tid" id="batonId">id …</div>
+          <div class="tv" id="batonV">v1</div>
+        </div>
+      </div>
+    </div>
+    <div class="ho-ctl">
+      <button class="btn primary" id="hoBtn">Hand off  A → B  →</button>
+      <button class="btn ghost" id="hoReset" disabled>reset</button>
+    </div>
+    <div class="ho-brief" id="hoBrief">
+      <div class="recvlab" id="recvlab">✓ agent-B received the packet — opening context:</div>
+      <div class="briefdoc" id="bBriefdoc"></div>
+    </div>
+  </div>
+
+  <!-- ============ REVISE / DIFF ============ -->
+  <div style="margin-top:40px">
+    <div class="sectitle">Checkpoint · revise() → v2, then diff</div>
+    <p class="secsub">Agent&nbsp;B resolves a question, makes progress, and checkpoints. The <span class="k">real</span> <span class="k">revise()</span> bumps the version, appends the new work, and recomputes the content-hash id; <span class="k">diffPackets(v1, v2)</span> reports exactly what advanced.</p>
+  </div>
+  <div class="panel revise">
+    <button class="btn primary" id="revBtn">Checkpoint &amp; revise → v2</button>
+    <div class="diffwrap" id="diffwrap">
+      <div class="verbar">
+        <span class="vchip v1" id="v1chip">v1 · id …</span>
+        <span class="arr">→</span>
+        <span class="vchip v2" id="v2chip">v2 · id …</span>
+        <span class="vd" id="vdelta"></span>
+      </div>
+      <div class="diffgrid" id="diffgrid"></div>
+    </div>
+  </div>
+
+  <!-- ============ JSON ============ -->
+  <div class="panel jsonpanel">
+    <div class="phead"><span class="dot"></span> the packet · one portable JSON document</div>
+    <div class="idbar">
+      <div class="idchip"><span class="lab">id (sha256) </span><span class="val mono" id="idval">…</span></div>
+      <div class="idchip ver"><span class="lab">version </span><span class="val mono" id="verval">1</span></div>
+      <div class="idchip valid" id="validchip"><span class="lab">schema </span><span class="val mono" id="validval">valid</span></div>
+    </div>
+    <pre class="json mono" id="jsonout"></pre>
+  </div>
+
+  <div class="foot">
+    Real <b class="mono">completeness() · resume() · summarize() · diffPackets() · validatePacket()</b> copied verbatim from <b class="mono">@avee1234/handover</b>; <b class="mono">pack() / revise()</b> ported to Web Crypto for the content-hash id — running client-side, zero dependencies, zero network.<br>
+    <a href="https://github.com/abhid1234/handover">github.com/abhid1234/handover</a> &nbsp;·&nbsp; <span class="mono">npm i @avee1234/handover</span> &nbsp;·&nbsp; MIT
+  </div>
+</div>
+
+<script type="module">
+import { completeness } from './lib/completeness.js';
+import { resume, summarize } from './lib/resume.js';
+import { diffPackets } from './lib/diff.js';
+import { validatePacket, REQUIRED_SECTIONS } from './lib/schema.js';
+import { pack, revise } from './lib/pack-browser.js';
+import { computeId } from './lib/id-browser.js';
+
+const $ = id => document.getElementById(id);
+
+// ---- fixed provenance inputs (the agent + clock the CLI would inject) ----
+const AGENT = 'claude-opus-4-8 / claude-code';
+const CREATED = '2026-07-13T12:00:00.000Z';
+const FROM_SESSION = 'sess_7c3a91';
+// state keys that live alongside key_files (kept as a believable demo constant)
+const STATE_EXTRA = {
+  branch: 'feat/oauth-pkce',
+  flow: 'authorization_code + PKCE (S256)',
+  token_ttl: '15m'
+};
+
+// ---- prefilled, believable in-progress task ----
+const model = {
+  goal: 'Add OAuth 2.0 (PKCE) to the public API',
+  context: 'The public API authenticates with static API keys today. Migrating to OAuth 2.0 authorization-code flow with PKCE (S256) so first-party mobile and third-party apps can auth without embedding a secret. Must stay backward-compatible with existing API keys for one release. Access-token TTL 15m, refresh 30d.',
+  progress: [
+    'Added /oauth/authorize and /oauth/token routes in src/api/oauth/routes.ts',
+    'Implemented S256 code_challenge verification in src/api/oauth/pkce.ts',
+    'Wrote 14 unit tests for the PKCE verifier — all passing'
+  ],
+  key_files: [
+    'src/api/oauth/routes.ts',
+    'src/api/oauth/pkce.ts',
+    'src/api/oauth/tokens.ts'
+  ],
+  next_steps: [
+    'Wire refresh-token rotation in src/api/oauth/tokens.ts',
+    'Add rate limiting to /oauth/token (10 req/min per client)',
+    'Update the OpenAPI spec + developer docs'
+  ],
+  open_questions: [
+    'Support the device-authorization grant for CLI tools now, or defer to v2?',
+    'Reuse the existing Redis session store for auth codes, or a dedicated TTL table?'
+  ],
+  artifacts: [
+    { path: 'src/api/oauth/routes.ts', note: 'new authorize + token endpoints' },
+    { path: 'src/api/oauth/pkce.ts', note: 'S256 challenge verifier' }
+  ]
+};
+
+// ---- build a packet body from the editable model (filter blank rows) ----
+const clean = a => a.filter(s => typeof s === 'string' && s.trim().length > 0).map(s => s.trim());
+function packInput(m){
+  return {
+    goal: m.goal, agent: AGENT, created: CREATED, from_session: FROM_SESSION,
+    context: m.context,
+    progress: clean(m.progress),
+    state: { ...STATE_EXTRA, key_files: clean(m.key_files) },
+    next_steps: clean(m.next_steps),
+    open_questions: clean(m.open_questions),
+    artifacts: m.artifacts
+      .filter(a => a.path && a.path.trim())
+      .map(a => ({ path: a.path.trim(), ...(a.note && a.note.trim() ? { note: a.note.trim() } : {}) })),
+    version: 1
+  };
+}
+// Use the REAL pack() when the inputs are valid; if the user empties `goal`,
+// pack() throws by design, so fall back to a raw assembled body (same shape,
+// same real content-hash id) so completeness()/resume() still run on it.
+async function buildPacket(m){
+  const input = packInput(m);
+  try {
+    return await pack(input);
+  } catch (_e) {
+    const body = {
+      version: 1,
+      goal: input.goal,
+      context: input.context,
+      progress: input.progress,
+      state: input.state,
+      next_steps: input.next_steps,
+      open_questions: input.open_questions,
+      artifacts: input.artifacts,
+      provenance: { handed_off_by: AGENT, created: CREATED, from_session: FROM_SESSION }
+    };
+    return { id: await computeId(body), ...body };
+  }
+}
+
+// ---------- tiny, safe markdown renderer for resume() output ----------
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function inline(raw){
+  const codes=[];
+  let s = raw.replace(/`([^`]+)`/g,(_,c)=>{codes.push(c);return ' '+(codes.length-1)+' ';});
+  s = esc(s);
+  s = s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+       .replace(/(^|[^\w])_([^_]+)_(?=[^\w]|$)/g,'$1<em>$2</em>');
+  s = s.replace(/ (\d+) /g,(_,i)=>'<code>'+esc(codes[+i])+'</code>');
+  return s;
+}
+function md(src){
+  const lines = String(src).split('\n');
+  let html='', inCode=false, codeBuf=[], inList=false;
+  const closeList=()=>{ if(inList){html+='</ul>';inList=false;} };
+  for(let i=0;i<lines.length;i++){
+    const ln=lines[i];
+    if(ln.startsWith('```')){
+      if(!inCode){inCode=true;codeBuf=[];}
+      else{inCode=false;html+='<pre class="cb"><code>'+esc(codeBuf.join('\n'))+'</code></pre>';}
+      continue;
+    }
+    if(inCode){codeBuf.push(ln);continue;}
+    if(/^#\s+/.test(ln)){closeList();html+='<div class="md-h1">'+inline(ln.replace(/^#\s+/,''))+'</div>';continue;}
+    if(/^##\s+/.test(ln)){closeList();html+='<div class="md-h2">'+inline(ln.replace(/^##\s+/,''))+'</div>';continue;}
+    if(/^---\s*$/.test(ln)){closeList();html+='<hr>';continue;}
+    if(/^-\s+/.test(ln)){ if(!inList){inList=true;html+='<ul>';} html+='<li>'+inline(ln.replace(/^-\s+/,''))+'</li>';continue;}
+    if(ln.trim()===''){closeList();continue;}
+    closeList();html+='<p>'+inline(ln)+'</p>';
+  }
+  closeList();
+  return html;
+}
+
+// ---------- JSON syntax highlighter ----------
+function hjson(obj){
+  const json = JSON.stringify(obj,null,2);
+  return esc(json)
+    .replace(/(&quot;(?:[^&]|&(?!quot;))*?&quot;)(\s*:)/g,'<span class="jk">$1</span>$2')
+    .replace(/:\s*(&quot;(?:[^&]|&(?!quot;))*?&quot;)/g,': <span class="js">$1</span>')
+    .replace(/:\s*(-?\d+\.?\d*)/g,': <span class="jn">$1</span>')
+    .replace(/:\s*(true|false|null)/g,': <span class="jb">$1</span>');
+}
+
+// ---------- gauge icons ----------
+const ICON_CHECK = '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#5eead4" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>';
+const ICON_MISS  = '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#e8a13a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5L22 20H2L12 3.5z"/><path d="M12 10v4.2"/><circle cx="12" cy="17.4" r=".6" fill="#e8a13a" stroke="none"/></svg>';
+const SECLABEL = { goal:'goal', context:'context', progress:'progress', state:'state · key_files', next_steps:'next_steps', open_questions:'open_questions', artifacts:'artifacts' };
+
+const C = 2 * Math.PI * 54; // ring circumference
+$('rbar').style.strokeDasharray = C;
+
+function renderGauge(c){
+  const pct = Math.round(c.score*100);
+  $('pct').textContent = pct + '%';
+  $('pctsub').textContent = c.present.length + ' / ' + c.total;
+  const bar = $('rbar');
+  bar.style.strokeDashoffset = C * (1 - c.score);
+  const col = c.score >= 1 ? 'var(--mint)' : (c.score >= 0.5 ? 'var(--amber)' : 'var(--coral)');
+  bar.style.stroke = col;
+  $('pct').style.color = col;
+
+  const presentSet = new Set(c.present);
+  $('seclist').innerHTML = REQUIRED_SECTIONS.map(sec=>{
+    const pres = presentSet.has(sec);
+    return `<div class="secrow ${pres?'pres':'miss'}">${pres?ICON_CHECK:ICON_MISS}<span class="snm">${SECLABEL[sec]}</span><span class="stt">${pres?'present':'MISSING'}</span></div>`;
+  }).join('');
+
+  const w = $('warns');
+  if(c.warnings.length===0){
+    w.className='warns empty';
+    w.innerHTML = `<div class="warn ok"><span class="wic">✓</span><span>no gaps flagged — this packet won't strand the next agent.</span></div>`;
+  } else {
+    w.className='warns';
+    w.innerHTML = c.warnings.map(msg=>`<div class="warn"><span class="wic">▲</span><span>${esc(msg)}</span></div>`).join('');
+  }
+}
+
+// ---------- main live refresh ----------
+let seq = 0;
+let currentPacket = null;
+async function refresh(){
+  const my = ++seq;
+  const p = await buildPacket(model);
+  if(my !== seq) return;          // a newer edit superseded this one
+  currentPacket = p;
+
+  renderGauge(completeness(p));                 // REAL
+  $('briefdoc').innerHTML = md(resume(p));      // REAL
+  $('jsonout').innerHTML = hjson(p);
+  $('idval').textContent = p.id;
+  $('verval').textContent = p.version;
+  const v = validatePacket(p);                  // REAL
+  const chip = $('validchip');
+  $('validval').textContent = v.valid ? 'valid' : (v.errors.length + ' error' + (v.errors.length>1?'s':''));
+  chip.className = 'idchip ' + (v.valid ? 'valid' : 'invalid');
+
+  $('batonId').textContent = 'id ' + p.id.slice(0,12) + '…';
+}
+
+// ---------- editable-list renderers ----------
+function renderList(key, mount, ph){
+  const arr = model[key];
+  mount.innerHTML='';
+  arr.forEach((val,idx)=>{
+    const row=document.createElement('div'); row.className='lrow';
+    const inp=document.createElement('input'); inp.className='linput mono'; inp.type='text'; inp.value=val; inp.placeholder=ph;
+    inp.addEventListener('input',()=>{arr[idx]=inp.value; refresh();});
+    const del=document.createElement('button'); del.className='del'; del.type='button'; del.textContent='×'; del.title='remove';
+    del.addEventListener('click',()=>{arr.splice(idx,1); renderList(key,mount,ph); refresh();});
+    row.append(inp,del); mount.appendChild(row);
+  });
+  const add=document.createElement('button'); add.className='addbtn'; add.type='button'; add.textContent='+ add line';
+  add.addEventListener('click',()=>{arr.push(''); renderList(key,mount,ph); refresh();
+    const inputs=mount.querySelectorAll('.linput'); inputs[inputs.length-1]?.focus();});
+  mount.appendChild(add);
+}
+function renderArtifacts(mount){
+  const arr=model.artifacts; mount.innerHTML='';
+  arr.forEach((a,idx)=>{
+    const row=document.createElement('div'); row.className='arow';
+    const p=document.createElement('input'); p.className='linput mono path'; p.type='text'; p.value=a.path||''; p.placeholder='path — src/api/oauth/tokens.ts';
+    p.addEventListener('input',()=>{a.path=p.value; refresh();});
+    const n=document.createElement('input'); n.className='linput mono note'; n.type='text'; n.value=a.note||''; n.placeholder='note (optional)';
+    n.addEventListener('input',()=>{a.note=n.value; refresh();});
+    const del=document.createElement('button'); del.className='del'; del.type='button'; del.textContent='×'; del.title='remove';
+    del.addEventListener('click',()=>{arr.splice(idx,1); renderArtifacts(mount); refresh();});
+    row.append(p,n,del); mount.appendChild(row);
+  });
+  const add=document.createElement('button'); add.className='addbtn'; add.type='button'; add.textContent='+ add artifact';
+  add.addEventListener('click',()=>{arr.push({path:'',note:''}); renderArtifacts(mount); refresh();});
+  mount.appendChild(add);
+}
+
+// ---------- wire the scalar fields ----------
+$('f-goal').value = model.goal;
+$('f-goal').addEventListener('input',e=>{model.goal=e.target.value; refresh();});
+$('f-context').value = model.context;
+$('f-context').addEventListener('input',e=>{model.context=e.target.value; refresh();});
+$('statebox').innerHTML = Object.entries(STATE_EXTRA).map(([k,v])=>`<span class="sk">${k}</span> ${esc(String(v))}`).join('<br>');
+
+// key aliases so renderList('keyfiles'|'next'|'questions') hits the real arrays
+Object.defineProperty(model,'keyfiles',{get(){return model.key_files;}});
+Object.defineProperty(model,'next',{get(){return model.next_steps;}});
+Object.defineProperty(model,'questions',{get(){return model.open_questions;}});
+
+renderList('progress', $('f-progress'), 'a step already done');
+renderList('keyfiles', $('f-keyfiles'), 'src/…');
+renderList('next', $('f-next'), 'what to do next');
+renderList('questions', $('f-questions'), 'an unresolved question');
+renderArtifacts($('f-artifacts'));
+
+// ---------- HANDOFF ----------
+let handedOff = false;
+$('hoBtn').addEventListener('click', ()=>{
+  if(handedOff || !currentPacket) return;
+  handedOff = true;
+  $('hoBtn').disabled = true;
+  $('baton').classList.add('passed');
+  setTimeout(()=>$('hoGate').classList.add('flash'), 480);
+  setTimeout(()=>$('hoGate').classList.remove('flash'), 900);
+  setTimeout(()=>{
+    $('stamp').classList.add('on');
+    $('agentB').classList.add('got');
+    $('bRole').innerHTML = 'any harness<br>reading packet…';
+    $('bBriefdoc').innerHTML = md(resume(currentPacket));   // REAL — what B receives
+    $('recvlab').innerHTML = '✓ agent-B received the packet — ' + esc(summarize(currentPacket));  // REAL
+    $('hoBrief').classList.add('show');
+    $('hoReset').disabled = false;
+  }, 1000);
+});
+$('hoReset').addEventListener('click', ()=>{
+  handedOff = false;
+  $('baton').classList.remove('passed');
+  $('stamp').classList.remove('on');
+  $('agentB').classList.remove('got');
+  $('bRole').innerHTML = 'any harness<br>waiting…';
+  $('hoBrief').classList.remove('show');
+  $('hoBtn').disabled = false;
+  $('hoReset').disabled = true;
+});
+
+// ---------- REVISE + DIFF ----------
+const DIFF_CATS = [
+  {k:'progress_added',     lab:'progress added',      sg:'+', cls:'good'},
+  {k:'progress_removed',   lab:'progress removed',    sg:'−', cls:'faint'},
+  {k:'next_steps_added',   lab:'next steps added',    sg:'+', cls:'coral'},
+  {k:'next_steps_removed', lab:'next steps removed',  sg:'−', cls:'good'},
+  {k:'questions_closed',   lab:'questions closed',    sg:'✓', cls:'good'},
+  {k:'questions_opened',   lab:'questions opened',    sg:'?', cls:'warn'},
+  {k:'artifacts_added',    lab:'artifacts added',     sg:'+', cls:'coral'},
+  {k:'artifacts_removed',  lab:'artifacts removed',   sg:'−', cls:'faint'},
+  {k:'state_keys_changed', lab:'state keys changed',  sg:'~', cls:'coral'}
+];
+$('revBtn').addEventListener('click', async ()=>{
+  const v1 = currentPacket;
+  if(!v1) return;
+  // agent-B answered the first open question, so it drops out of the base…
+  const resolvedBase = { ...v1, open_questions: (v1.open_questions||[]).slice(1) };
+  // …then checkpoints the new work through the REAL revise() (append + bump + rehash)
+  const v2 = await revise(resolvedBase, {
+    created: '2026-07-13T15:30:00.000Z',
+    agent: AGENT,
+    progress: [
+      'Wired refresh-token rotation in src/api/oauth/tokens.ts',
+      'Added rate limiting to /oauth/token (10 req/min per client)'
+    ],
+    next_steps: [
+      'Ship behind a feature flag, enable for 5% of clients',
+      'Deprecate static API keys after one release'
+    ],
+    open_questions: [
+      'Rotate refresh tokens on every use, or only on suspected theft?'
+    ],
+    artifacts: [
+      { path: 'src/api/oauth/tokens.ts', note: 'refresh-token rotation' }
+    ],
+    state: { checkpoint: 'refresh + rate-limit done' }
+  });
+
+  const d = diffPackets(v1, v2);   // REAL
+
+  $('v1chip').textContent = 'v'+v1.version+' · '+v1.id.slice(0,10)+'…';
+  $('v2chip').textContent = 'v'+v2.version+' · '+v2.id.slice(0,10)+'…';
+  $('vdelta').textContent = 'version_delta +'+d.version_delta + (d.goal_changed?' · goal changed':'');
+
+  let html='';
+  for(const cat of DIFF_CATS){
+    const items = d[cat.k];
+    if(!items || items.length===0) continue;
+    html += '<div class="dcat"><div class="dlab">'+cat.lab+' · '+items.length+'</div>' +
+      items.map(it=>`<div class="ditem ${cat.cls}"><span class="sg">${cat.sg}</span><span>${esc(String(it))}</span></div>`).join('') +
+      '</div>';
+  }
+  if(!html) html = '<div class="ditem faint"><span>no changes</span></div>';
+  $('diffgrid').innerHTML = html;
+  $('diffwrap').classList.add('show');
+  $('revBtn').textContent = 'Re-run checkpoint';
+});
+
+// ---------- go ----------
+refresh();
+</script>
+</body>
+</html>
