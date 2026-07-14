@@ -252,6 +252,70 @@ test("from-claude-code draft can be piped back into pack", () => {
   assert.equal(JSON.parse(r.stdout).goal, "the goal");
 });
 
+// --- from <harness> ---------------------------------------------------------
+
+test("from <harness>: resolves the adapter from the registry (codex)", () => {
+  const rollout = file(
+    "codex.jsonl",
+    [
+      JSON.stringify({ type: "response_item", payload: { type: "message", role: "user", content: "add OAuth" } }),
+      JSON.stringify({ type: "response_item", payload: { type: "message", role: "assistant", content: "- wrote the parser" } }),
+    ].join("\n")
+  );
+  const r = run(["from", "codex", rollout, "--agent", "codex"]);
+  assert.equal(r.status, 0, r.stderr);
+  const draft = JSON.parse(r.stdout);
+  assert.equal(draft.goal, "add OAuth");
+  assert.deepEqual(draft.progress, ["wrote the parser"]);
+  assert.equal(draft.agent, "codex");
+});
+
+test("from antigravity: parses an AGENTS.md-style brief into a draft", () => {
+  const brief = file("AGENTS.md", ["# Add PKCE to login", "Stay framework-agnostic.", "- wrote the verifier"].join("\n"));
+  const r = run(["from", "antigravity", brief]);
+  assert.equal(r.status, 0, r.stderr);
+  const draft = JSON.parse(r.stdout);
+  assert.equal(draft.goal, "Add PKCE to login");
+  assert.deepEqual(draft.progress, ["wrote the verifier"]);
+});
+
+test("from-<harness> shorthand routes through the registry (from-cursor)", () => {
+  const session = file("cursor.json", JSON.stringify([{ role: "user", content: "the goal" }]));
+  const r = run(["from-cursor", session]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(r.stdout).goal, "the goal");
+});
+
+test("from-claude-code still works as a from-<harness> shorthand", () => {
+  const transcript = file(
+    "t3.jsonl",
+    JSON.stringify({ type: "user", message: { role: "user", content: "legacy goal" } })
+  );
+  const r = run(["from-claude-code", transcript]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(r.stdout).goal, "legacy goal");
+});
+
+test("from with an unknown harness → error listing known harnesses, exit 1", () => {
+  const anyFile = file("any.jsonl", "{}");
+  const r = run(["from", "telepathy", anyFile]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /unknown harness/);
+  assert.match(r.stderr, /claude-code/);
+});
+
+test("from without a harness argument → error, exit 1", () => {
+  const r = run(["from"]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /requires a <harness>/);
+});
+
+test("from <harness> without a file argument → error, exit 1", () => {
+  const r = run(["from", "codex"]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /requires a <file>/);
+});
+
 // --- router -----------------------------------------------------------------
 
 test("no subcommand → usage on stderr, exit 1", () => {

@@ -6,7 +6,9 @@
 // Re-exports the `resume` / `summarize` briefing renderers.
 // Re-exports the `diffPackets` checkpoint-diff API.
 // Re-exports the single-document packet store (`savePacket`, `loadPacket`, …).
-// Re-exports the Claude Code transcript adapter (`fromClaudeCode`).
+// Re-exports the harness adapters (`fromClaudeCode`, `fromCodex`, `fromCursor`,
+// `fromAntigravity`) and the name→builder registry (`getAdapter`, `ADAPTERS`).
+// Re-exports `resumeInto` — the resume briefing in a harness's opening shape.
 
 export {
   validatePacket,
@@ -23,4 +25,12 @@ export { completeness } from "./completeness.js";
 export { resume, summarize } from "./resume.js";
 export { diffPackets } from "./diff.js";
 export { savePacket, loadPacket, defaultPacketPath } from "./io.js";
-export { fromClaudeCode } from "./adapters/claude-code.js";
+export {
+  fromClaudeCode,
+  fromCodex,
+  fromCursor,
+  fromAntigravity,
+  ADAPTERS,
+  getAdapter,
+} from "./adapters/index.js";
+export { resumeInto, RESUME_SHAPES } from "./resume-into.js";

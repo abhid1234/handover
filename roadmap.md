@@ -20,11 +20,14 @@ Built the same way as provenant / constraintguard / worklease / memport / selfpa
 
 5. **io** — `savePacket` / `loadPacket` / `defaultPacketPath`. The single-document store: pretty JSON in, parsed packet out, clear errors on a missing or malformed file. No ledger to fold.
 
-## Adapters & ecosystem (v0.2)
+## Shipped (v0.2)
 
 6. **Claude Code adapter (dogfood)** — `fromClaudeCode(transcript)` drafts a packet from a `.jsonl` session: latest user message → goal, recent assistant text → context, bullet lines → progress. The user refines the draft and `pack()`s it. Dogfood on the author's own parallel-agent factory.
-7. **Codex / Cursor / Google Antigravity adapters** — the same `(raw, opts) → draftPacket` contract for each harness's native session artifact, behind the adapter registry.
-8. **`handover resume --into <harness>`** — emit the briefing in each harness's preferred opening-context shape (system prompt, first user turn, MCP resource).
+7. **Codex / Cursor / Google Antigravity adapters** — ✅ `fromCodex`, `fromCursor`, `fromAntigravity` — the same `(raw, opts) → draftPacket` contract for each harness's native session artifact, all four behind the `getAdapter(name)` registry (`claude-code` / `codex` / `cursor` / `antigravity`) and the `from <harness>` / `from-<harness>` CLI.
+8. **`resumeInto(packet, harness)`** — ✅ emits the briefing in each harness's opening-context shape (`'system-prompt'`, `'user-turn'`, `'mcp-resource'`), reusing the real `resume()` Markdown as the body; unknown shapes throw.
+
+## Ecosystem (next)
+
 9. **OpenTelemetry bridge** — emit pack/revise/resume events as span attributes (reuse the family pattern).
 10. **packet chains** — link a packet to the one it revised (via `provenance`), so a task's full handoff history is walkable like a provenance chain.
 

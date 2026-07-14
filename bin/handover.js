@@ -8,7 +8,8 @@
 //  - `completeness <file>`: print the handoff-quality score report.
 //  - `resume <file>`: print the Markdown briefing a fresh agent can be handed.
 //  - `diff <a> <b>`: print what checkpoint b advanced over checkpoint a.
-//  - `from-claude-code <transcript.jsonl>`: print a draft packet to refine.
+//  - `from <harness> <file>`: resolve the adapter and print a draft packet.
+//  - `from-claude-code <transcript.jsonl>`: shorthand for `from claude-code`.
 
 import { readFileSync } from "node:fs";
 import { pack } from "../src/pack.js";
@@ -17,7 +18,7 @@ import { completeness } from "../src/completeness.js";
 import { resume, summarize } from "../src/resume.js";
 import { diffPackets } from "../src/diff.js";
 import { savePacket, loadPacket, defaultPacketPath } from "../src/io.js";
-import { fromClaudeCode } from "../src/adapters/claude-code.js";
+import { getAdapter, ADAPTERS } from "../src/adapters/index.js";
 
 const USAGE = `handover — the open format for handing off an in-progress agent task
 
@@ -38,9 +39,12 @@ Usage:
       Render the Markdown briefing a fresh agent can be handed verbatim.
   handover diff <a> <b> [--json]
       Show what checkpoint <b> advanced over checkpoint <a>.
-  handover from-claude-code <transcript.jsonl> [--agent <id>] [--json]
-      Parse a Claude Code .jsonl transcript into a DRAFT packet to refine and
-      then pipe back into \`handover pack\`.
+  handover from <harness> <file> [--agent <id>] [--json]
+      Parse a harness's native session artifact into a DRAFT packet to refine and
+      then pipe back into \`handover pack\`. <harness> is one of:
+      claude-code, codex, cursor, antigravity.
+  handover from-<harness> <file> [--agent <id>] [--json]
+      Shorthand for \`from <harness> <file>\` (e.g. \`from-claude-code\`).
 
 Flags:
   --file <path>    JSON object to pack (default: stdin)
@@ -290,9 +294,18 @@ function runDiff(args) {
   process.exit(0);
 }
 
-// --- from-claude-code -------------------------------------------------------
+// --- from <harness> ---------------------------------------------------------
 
-function runFromClaudeCode(args) {
+// Resolve `harness` in the adapter registry and print a draft packet parsed from
+// `file`. Shared by the generic `from` command and the `from-<harness>` shortcuts.
+// `label` is what an argument-count error names (the invoked command).
+function runFromHarness(harness, args, label) {
+  const adapter = getAdapter(harness);
+  if (!adapter) {
+    const known = Object.keys(ADAPTERS).join(", ");
+    return fail(`error: unknown harness: ${harness} (known: ${known})\n\n` + USAGE);
+  }
+
   let file = null;
   let agent = process.env.HANDOVER_AGENT || undefined;
   let json = false;
@@ -308,20 +321,29 @@ function runFromClaudeCode(args) {
     } else if (file == null) {
       file = a;
     } else {
-      fail(`error: \`from-claude-code\` takes a single <transcript.jsonl> (extra: ${a})\n\n` + USAGE);
+      fail(`error: \`${label}\` takes a single <file> (extra: ${a})\n\n` + USAGE);
     }
   }
   if (file == null) {
-    return fail("error: `from-claude-code` requires a <transcript.jsonl> argument\n\n" + USAGE);
+    return fail(`error: \`${label}\` requires a <file> argument\n\n` + USAGE);
   }
 
   const raw = safeRead(file);
-  const draft = fromClaudeCode(raw, { agent });
+  const draft = adapter(raw, { agent });
 
   // A draft prints as JSON either way — it is meant to be edited and piped back
   // into `handover pack`, not read as prose.
   process.stdout.write(JSON.stringify(draft, null, json ? 0 : 2) + "\n");
   process.exit(0);
+}
+
+// `from <harness> <file>` — the harness name is the first positional argument.
+function runFrom(args) {
+  const harness = args[0];
+  if (harness == null || harness.startsWith("--")) {
+    return fail("error: `from` requires a <harness> argument (e.g. `from claude-code <file>`)\n\n" + USAGE);
+  }
+  return runFromHarness(harness, args.slice(1), `from ${harness}`);
 }
 
 // --- main router ------------------------------------------------------------
@@ -336,7 +358,11 @@ function main(argv) {
   if (command === "completeness") return runCompleteness(args.slice(1));
   if (command === "resume") return runResume(args.slice(1));
   if (command === "diff") return runDiff(args.slice(1));
-  if (command === "from-claude-code") return runFromClaudeCode(args.slice(1));
+  if (command === "from") return runFrom(args.slice(1));
+  // `from-<harness>` shorthand (e.g. `from-claude-code`, `from-antigravity`).
+  if (typeof command === "string" && command.startsWith("from-")) {
+    return runFromHarness(command.slice("from-".length), args.slice(1), command);
+  }
 
   // Unknown / missing subcommand → usage on stderr, exit 1.
   fail(USAGE);

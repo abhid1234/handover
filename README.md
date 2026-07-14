@@ -15,7 +15,7 @@ npx @avee1234/handover pack --goal "add PKCE to login" --agent me   # capture th
 npx @avee1234/handover completeness .handover/packet.json           # is this good enough to resume from?
 npx @avee1234/handover resume .handover/packet.json                 # render the briefing for a fresh agent
 npx @avee1234/handover diff old.json new.json                       # what did one checkpoint advance over another?
-npx @avee1234/handover from-claude-code transcript.jsonl            # draft a packet from a native transcript
+npx @avee1234/handover from claude-code transcript.jsonl            # draft a packet from a native session (any harness)
 ```
 
 **Why it's different:** content-addressed, so a packet is self-identifying — its `id` is the sha256 of its content, so any edit produces a new identity and a resumed packet is provably the one that was handed off. It's a **single living document**, not a ledger — no registry to fold, no server to run. Harness-neutral: Claude Code, Codex, Cursor, Google Antigravity, or a factory worker — anything that can run a CLI or import a function.
@@ -86,6 +86,7 @@ Zero-dependency ESM. `import { … } from "@avee1234/handover"`. Every function 
 **Assess & render** — pure, total, over a single packet.
 - `completeness(packet)` → `{ score, total, present, missing, warnings }` — how much of the handoff a fresh agent has to work with, over the seven `REQUIRED_SECTIONS`, plus plain-language warnings about gaps that strand a resumer.
 - `resume(packet)` → the Markdown briefing a fresh agent can be handed verbatim (goal, context, what's done, live state + key files, next steps, open questions, artifacts, and a provenance footer).
+- `resumeInto(packet, harness)` → the same briefing in a harness's opening-context **shape**: `'system-prompt'` (a system-prompt string), `'user-turn'` (a first-user-message string), or `'mcp-resource'` (`{ uri, mimeType: 'text/markdown', text }`). The Markdown body is the real `resume()` output in every shape; an unknown shape throws (the supported shapes are in `RESUME_SHAPES`).
 - `summarize(packet)` → a one-line status: `"<goal> — N done, M next, K open"`.
 - `diffPackets(a, b)` → what checkpoint `b` advanced over `a`: `{ goal_changed, version_delta, progress_added/removed, next_steps_added/removed, questions_opened/closed, artifacts_added/removed, state_keys_changed }` (set semantics on the string arrays — reordering reads as no change).
 
@@ -94,9 +95,12 @@ Zero-dependency ESM. `import { … } from "@avee1234/handover"`. Every function 
 - `loadPacket(path)` → the parsed packet (clear throw on a missing file or malformed JSON).
 - `defaultPacketPath(cwd)` → `HANDOVER_PACKET`, else `.handover/packet.json`.
 
-**Adapters** — seed a draft packet from a harness's native session artifact so writing one is cheap.
-- `fromClaudeCode(rawJsonlTranscript, opts)` → a PARTIAL draft (latest user message → `goal`, last assistant turn → `context`, assistant bullet/numbered lines → `progress`). Pure and tolerant of malformed lines; **not** a validated packet — refine it, then `pack()`.
-- `ADAPTERS`, `getAdapter(name)` — the name→builder registry (add new harnesses here).
+**Adapters** — seed a draft packet from a harness's native session artifact so writing one is cheap. Every adapter shares one contract: `(raw, opts) → draftPacket` — latest user message → `goal`, last assistant turn → `context`, assistant bullet/numbered lines → `progress`. All are pure and tolerant of malformed input, and all return a PARTIAL draft (no `id`, no `created`) — **not** a validated packet. Refine it, then `pack()`. `opts` is `{ agent?, from_session?, max_progress? }`.
+- `fromClaudeCode(rawJsonlTranscript, opts)` → draft from a Claude Code `.jsonl` session transcript.
+- `fromCodex(rawJsonlRollout, opts)` → draft from an OpenAI Codex CLI `.jsonl` rollout (unwraps the `payload` envelope; reads `input_text` / `output_text` blocks).
+- `fromCursor(rawSession, opts)` → draft from a Cursor chat export (whole-document JSON, `.jsonl`, `User:`/`Assistant:` prose, or a marker-less scratchpad).
+- `fromAntigravity(rawSession, opts)` → draft from a Google Antigravity session (JSON / `.jsonl` / prose) or an `AGENTS.md`-style task brief (headings → goal, bullets → progress).
+- `ADAPTERS`, `getAdapter(name)` — the name→builder registry keyed `claude-code` / `codex` / `cursor` / `antigravity` (add new harnesses here).
 
 ## CLI
 
@@ -107,7 +111,8 @@ handover validate <file> [--json]
 handover completeness <file> [--json]
 handover resume <file>
 handover diff <a> <b> [--json]
-handover from-claude-code <transcript.jsonl> [--agent <id>] [--json]
+handover from <harness> <file> [--agent <id>] [--json]
+handover from-<harness> <file> [--agent <id>] [--json]
 ```
 
 - **`pack`** — read a JSON object (from `--file` or stdin), fill section defaults, stamp the handoff (agent + timestamp), validate, and write the packet. `--goal` / `--agent` override the input; the clock is read only here. Writes to `--out` (default: `HANDOVER_PACKET`, else `.handover/packet.json`).
@@ -116,7 +121,7 @@ handover from-claude-code <transcript.jsonl> [--agent <id>] [--json]
 - **`completeness`** — score how much of the handoff a fresh agent has to work with, and warn about the gaps that strand a resumer.
 - **`resume`** — render the Markdown briefing a fresh agent can be handed verbatim.
 - **`diff`** — show what checkpoint `<b>` advanced over checkpoint `<a>`.
-- **`from-claude-code`** — parse a Claude Code `.jsonl` transcript into a DRAFT packet to refine and pipe back into `handover pack`.
+- **`from`** — resolve a harness adapter from the registry (`claude-code`, `codex`, `cursor`, `antigravity`) and parse its native session artifact into a DRAFT packet to refine and pipe back into `handover pack`. `from-<harness>` (e.g. `from-claude-code`) is the shorthand form.
 
 Common flags: `--agent <id>` (or `HANDOVER_AGENT`), `--out <path>` (or `HANDOVER_PACKET`, default `.handover/packet.json`), `--json` for machine-readable output.
 
@@ -129,4 +134,4 @@ npx @avee1234/handover pack …       # CLI, no install
 
 Requires Node ≥ 18. Run the test suite with `node --test`.
 
-Status: **v0.1** — see [`roadmap.md`](roadmap.md). MIT · zero dependencies · harness-neutral.
+Status: **v0.2** — multi-harness adapters (Claude Code, Codex, Cursor, Google Antigravity) + `resumeInto`. See [`roadmap.md`](roadmap.md). MIT · zero dependencies · harness-neutral.

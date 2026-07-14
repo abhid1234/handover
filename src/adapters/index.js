@@ -7,12 +7,18 @@
 // contract: `(raw, opts) → draftPacket` (partial, unvalidated, no `created`).
 
 import { fromClaudeCode } from "./claude-code.js";
+import { fromCodex } from "./codex.js";
+import { fromCursor } from "./cursor.js";
+import { fromAntigravity } from "./antigravity.js";
 
-export { fromClaudeCode };
+export { fromClaudeCode, fromCodex, fromCursor, fromAntigravity };
 
 // ADAPTERS[name] → the draft-builder for that harness. Add new harnesses here.
 export const ADAPTERS = {
   "claude-code": fromClaudeCode,
+  codex: fromCodex,
+  cursor: fromCursor,
+  antigravity: fromAntigravity,
 };
 
 // getAdapter(name) → the adapter function, or null if the harness is unknown.
