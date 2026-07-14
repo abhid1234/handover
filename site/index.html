@@ -289,6 +289,21 @@
     border-left:3px solid var(--coral);border-radius:9px;line-height:1.55;font-family:var(--serif)}
   .adnote .k{font-family:var(--mono);font-size:.86em;color:var(--coral)}
 
+  /* ---------- segmented picker (harness + resume shape) ---------- */
+  .hpick{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .hpick .glabel{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-right:4px}
+  .hpick button{appearance:none;background:var(--plum);border:1px solid var(--line);color:var(--ink2);
+    font-family:var(--mono);font-size:12px;font-weight:600;padding:7px 13px;border-radius:20px;cursor:pointer;transition:.15s}
+  .hpick button:hover{border-color:var(--line2);color:var(--ink)}
+  .hpick button[aria-pressed="true"]{background:linear-gradient(135deg,var(--coral),var(--coral2));color:#fff;
+    border-color:transparent;box-shadow:0 8px 20px -10px var(--coral2)}
+  .shapeout{background:var(--plum);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-top:4px;
+    font-family:var(--mono);font-size:12.5px;line-height:1.62;color:var(--ink2);white-space:pre-wrap;word-break:break-word;
+    overflow:auto;max-height:520px}
+  .shapemeta{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin:0 0 10px;line-height:1.6}
+  .shapemeta b{color:var(--mint);font-weight:600}
+  .shapemeta .k{color:var(--coral)}
+
   /* ---------- quickstart ---------- */
   .qs{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:30px}
   @media(max-width:820px){ .qs{grid-template-columns:1fr} }
@@ -449,6 +464,14 @@
       <div class="tabpanel" id="p-resume" role="tabpanel">
         <p class="tdesc">The real <span class="k">resume()</span> renders the packet into the Markdown briefing a fresh agent is handed as its opening context — goal, background to respect, what's done, the live state and files to open first, next steps, open questions, artifacts, and a provenance footer. Empty sections render an italic placeholder so the resumer sees exactly what was <em>not</em> handed over.</p>
         <div class="briefdoc" id="briefdoc"></div>
+
+        <div class="revsplit">
+          <div class="phead"><span class="dot"></span> resumeInto(packet, shape) · emit the briefing in the shape each harness wants</div>
+          <p class="tdesc" style="margin:14px 0 14px">One canonical briefing, wrapped in the opening-context shape the target harness expects. The real <span class="k">resumeInto()</span> emits the same <span class="k">resume()</span> body as a <span class="k">system-prompt</span> string, a first <span class="k">user-turn</span> string, or an <span class="k">mcp-resource</span> object a harness can read on demand.</p>
+          <div class="hpick" id="shapePick"><span class="glabel">shape</span></div>
+          <p class="shapemeta" id="shapeMeta"></p>
+          <div class="shapeout" id="shapeOut"></div>
+        </div>
       </div>
 
       <!-- 04 HANDOFF + DIFF -->
@@ -504,10 +527,11 @@
 
       <!-- 05 ADAPTER -->
       <div class="tabpanel" id="p-adapter" role="tabpanel">
-        <p class="tdesc">You don't start a packet from a blank page. The real <span class="k">fromClaudeCode()</span> adapter reads a Claude Code <span class="k">.jsonl</span> transcript and drafts a partial packet — inferring the <span class="k">goal</span> (latest ask), <span class="k">context</span> (model's latest understanding), and <span class="k">progress</span> (bullet lines the assistant wrote). It's a <em>draft</em> you refine, not a finished packet. Run it, then load the draft into <b>Pack</b>.</p>
+        <p class="tdesc">You don't start a packet from a blank page. Pick the harness the session came from, and the real adapter — <span class="k">fromClaudeCode</span> / <span class="k">fromCodex</span> / <span class="k">fromCursor</span> / <span class="k">fromAntigravity</span>, resolved through the <span class="k">getAdapter()</span> registry — reads its native transcript and drafts a partial packet: the <span class="k">goal</span> (latest ask), <span class="k">context</span> (model's latest understanding), and <span class="k">progress</span> (bullet lines the assistant wrote). It's a <em>draft</em> you refine, not a finished packet. Run it, then load the draft into <b>Pack</b>.</p>
+        <div class="hpick" id="harnessPick"><span class="glabel">harness</span></div>
         <div class="split">
           <div>
-            <div class="fl" style="margin-bottom:8px"><span class="name">Claude Code transcript</span><span class="opt">.jsonl · edit me</span></div>
+            <div class="fl" style="margin-bottom:8px"><span class="name" id="ad-label">Claude Code transcript</span><span class="opt" id="ad-hint">.jsonl · edit me</span></div>
             <textarea class="tin" id="ad-in" spellcheck="false" style="min-height:300px;font-size:11.5px"></textarea>
             <div class="ho-ctl">
               <button class="btn primary" id="ad-run">Extract draft →</button>
@@ -515,9 +539,9 @@
             </div>
           </div>
           <div>
-            <div class="fl" style="margin-bottom:8px"><span class="name">fromClaudeCode(raw) → draft packet</span></div>
+            <div class="fl" style="margin-bottom:8px"><span class="name" id="ad-fn">fromClaudeCode(raw) → draft packet</span></div>
             <div class="out" id="ad-out"><span class="empty">Press "Extract draft" to run the real adapter over the transcript.</span></div>
-            <div class="adnote">The draft leaves <span class="k">state</span>, <span class="k">next_steps</span>, <span class="k">open_questions</span> and <span class="k">artifacts</span> empty — a transcript can't know them. That's the point: load it into <b>Pack</b>, watch <span class="k">completeness()</span> flag the gaps, and fill them in before you hand off.</div>
+            <div class="adnote">Whichever harness you pick, the draft leaves <span class="k">state</span>, <span class="k">next_steps</span>, <span class="k">open_questions</span> and <span class="k">artifacts</span> empty — a transcript can't know them. That's the point: load it into <b>Pack</b>, watch <span class="k">completeness()</span> flag the gaps, and fill them in before you hand off.</div>
           </div>
         </div>
       </div>
@@ -577,6 +601,11 @@ npx @avee1234/handover resume \
     <details class="src"><summary><span class="fl2">schema.js</span> <span class="fn">validatePacket() · REQUIRED_SECTIONS</span> <span class="chev">›</span></summary><pre id="src-schema">loading…</pre></details>
     <details class="src"><summary><span class="fl2">pack-browser.js</span> <span class="fn">pack() · revise()</span> <span class="chev">›</span></summary><pre id="src-pack-browser">loading…</pre></details>
     <details class="src"><summary><span class="fl2">claude-code.js</span> <span class="fn">fromClaudeCode()</span> <span class="chev">›</span></summary><pre id="src-claude-code">loading…</pre></details>
+    <details class="src"><summary><span class="fl2">codex.js</span> <span class="fn">fromCodex()</span> <span class="chev">›</span></summary><pre id="src-codex">loading…</pre></details>
+    <details class="src"><summary><span class="fl2">cursor.js</span> <span class="fn">fromCursor()</span> <span class="chev">›</span></summary><pre id="src-cursor">loading…</pre></details>
+    <details class="src"><summary><span class="fl2">antigravity.js</span> <span class="fn">fromAntigravity()</span> <span class="chev">›</span></summary><pre id="src-antigravity">loading…</pre></details>
+    <details class="src"><summary><span class="fl2">adapters.js</span> <span class="fn">getAdapter() · ADAPTERS</span> <span class="chev">›</span></summary><pre id="src-adapters">loading…</pre></details>
+    <details class="src"><summary><span class="fl2">resume-into.js</span> <span class="fn">resumeInto() · RESUME_SHAPES</span> <span class="chev">›</span></summary><pre id="src-resume-into">loading…</pre></details>
   </section>
 
   <section>
@@ -624,6 +653,8 @@ import { validatePacket, REQUIRED_SECTIONS } from './lib/schema.js';
 import { pack, revise } from './lib/pack-browser.js';
 import { computeId } from './lib/id-browser.js';
 import { fromClaudeCode } from './lib/claude-code.js';
+import { getAdapter } from './lib/adapters.js';
+import { resumeInto, RESUME_SHAPES } from './lib/resume-into.js';
 
 const $ = id => document.getElementById(id);
 
@@ -710,11 +741,11 @@ async function buildPacket(m){
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function inline(raw){
   const codes=[];
-  let s = raw.replace(/`([^`]+)`/g,(_,c)=>{codes.push(c);return ' '+(codes.length-1)+' ';});
+  let s = raw.replace(/`([^`]+)`/g,(_,c)=>{codes.push(c);return '￼'+(codes.length-1)+'￼';});
   s = esc(s);
   s = s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
        .replace(/(^|[^\w])_([^_]+)_(?=[^\w]|$)/g,'$1<em>$2</em>');
-  s = s.replace(/ (\d+) /g,(_,i)=>'<code>'+esc(codes[+i])+'</code>');
+  s = s.replace(/￼(\d+)￼/g,(_,i)=>'<code>'+esc(codes[+i])+'</code>');
   return s;
 }
 function md(src){
@@ -795,6 +826,7 @@ async function refresh(){
 
   renderGauge(completeness(p));                 // REAL
   $('briefdoc').innerHTML = md(resume(p));      // REAL
+  renderShape();                                // REAL resumeInto() in the selected shape
   $('jsonout').innerHTML = hjson(p);
   $('idval').textContent = p.id;
   $('verval').textContent = p.version;
@@ -961,8 +993,9 @@ $('revBtn').addEventListener('click', async ()=>{
   $('revBtn').textContent = 'Re-run checkpoint';
 });
 
-// ---------- ADAPTER ----------
-const SAMPLE_TRANSCRIPT = [
+// ---------- ADAPTER (multi-harness, via the real getAdapter registry) ----------
+// Claude Code — .jsonl of {type, message:{role, content}} entries.
+const SAMPLE_CLAUDE = [
   {type:'user',message:{role:'user',content:'Add OAuth 2.0 with PKCE to our public API. Keep the existing static API keys working for now.'}},
   {type:'assistant',message:{role:'assistant',content:[{type:'text',text:"I'll implement the authorization-code flow with PKCE (S256). Plan:\n- Add /oauth/authorize and /oauth/token routes\n- Implement S256 code_challenge verification\n- Keep static API keys valid for one release"}]}},
   {type:'assistant',message:{role:'assistant',content:[{type:'tool_use',id:'toolu_01',name:'Edit',input:{file:'src/api/oauth/routes.ts'}}]}},
@@ -971,15 +1004,84 @@ const SAMPLE_TRANSCRIPT = [
   {type:'user',message:{role:'user',content:'Great. Next, wire up refresh-token rotation and add rate limiting to the token endpoint.'}}
 ].map(o=>JSON.stringify(o)).join('\n');
 
+// Codex CLI — .jsonl rollout; records wrap under a `payload` envelope, prose in
+// input_text / output_text blocks.
+const SAMPLE_CODEX = [
+  {type:'response_item',payload:{type:'message',role:'user',content:[{type:'input_text',text:'Add OAuth 2.0 with PKCE to our public API. Keep the existing static API keys working for now.'}]}},
+  {type:'response_item',payload:{type:'message',role:'assistant',content:[{type:'output_text',text:"I'll implement the authorization-code flow with PKCE (S256). Plan:\n- Add /oauth/authorize and /oauth/token routes\n- Implement S256 code_challenge verification\n- Keep static API keys valid for one release"}]}},
+  {type:'response_item',payload:{type:'function_call',name:'apply_patch',arguments:'{"path":"src/api/oauth/routes.ts"}'}},
+  {type:'response_item',payload:{type:'function_call_output',output:'ok'}},
+  {type:'response_item',payload:{type:'message',role:'assistant',content:[{type:'output_text',text:"Progress so far:\n- Added /oauth/authorize and /oauth/token routes in src/api/oauth/routes.ts\n- Implemented S256 code_challenge verification in src/api/oauth/pkce.ts\n- Wrote 14 unit tests for the PKCE verifier — all passing"}]}},
+  {type:'response_item',payload:{type:'message',role:'user',content:[{type:'input_text',text:'Great. Next, wire up refresh-token rotation and add rate limiting to the token endpoint.'}]}}
+].map(o=>JSON.stringify(o)).join('\n');
+
+// Cursor — a whole-document JSON chat export: { messages: [ {role, content}, … ] }.
+const SAMPLE_CURSOR = JSON.stringify({ messages: [
+  {role:'user',content:'Add OAuth 2.0 with PKCE to our public API. Keep the existing static API keys working for now.'},
+  {role:'assistant',content:"I'll implement the authorization-code flow with PKCE (S256). Plan:\n- Add /oauth/authorize and /oauth/token routes\n- Implement S256 code_challenge verification\n- Keep static API keys valid for one release"},
+  {role:'assistant',content:"Progress so far:\n- Added /oauth/authorize and /oauth/token routes in src/api/oauth/routes.ts\n- Implemented S256 code_challenge verification in src/api/oauth/pkce.ts\n- Wrote 14 unit tests for the PKCE verifier — all passing"},
+  {role:'user',content:'Great. Next, wire up refresh-token rotation and add rate limiting to the token endpoint.'}
+] }, null, 2);
+
+// Google Antigravity — a marker-less AGENTS.md task brief: heading = the ask,
+// prose = the background, bullets = progress. The adapter reads it pragmatically.
+const SAMPLE_ANTIGRAVITY = `# Add OAuth 2.0 (PKCE) to the public API
+
+The public API authenticates with static API keys today; migrate to the OAuth 2.0 authorization-code flow with PKCE (S256), keeping existing API keys valid for one release.
+
+## Progress
+- Added /oauth/authorize and /oauth/token routes in src/api/oauth/routes.ts
+- Implemented S256 code_challenge verification in src/api/oauth/pkce.ts
+- Wrote 14 unit tests for the PKCE verifier — all passing
+
+## Next
+- Wire refresh-token rotation and add rate limiting to /oauth/token`;
+
+const HARNESSES = {
+  'claude-code': { label:'Claude Code transcript', hint:'.jsonl · edit me',      fn:'fromClaudeCode',   from:'sess_cc_1a2b',     sample:SAMPLE_CLAUDE },
+  'codex':       { label:'Codex CLI rollout',      hint:'.jsonl · edit me',      fn:'fromCodex',        from:'sess_codex_9f',    sample:SAMPLE_CODEX },
+  'cursor':      { label:'Cursor session',         hint:'.json · edit me',       fn:'fromCursor',       from:'sess_cursor_4d',   sample:SAMPLE_CURSOR },
+  'antigravity': { label:'Antigravity session',    hint:'AGENTS.md · edit me',   fn:'fromAntigravity',  from:'sess_ag_7e',       sample:SAMPLE_ANTIGRAVITY }
+};
+const HARNESS_ORDER = ['claude-code','codex','cursor','antigravity'];
+let currentHarness = 'claude-code';
 let lastDraft = null;
-$('ad-in').value = SAMPLE_TRANSCRIPT;
+
+// build the harness picker
+(function buildHarnessPicker(){
+  const mount = $('harnessPick');
+  for(const name of HARNESS_ORDER){
+    const b=document.createElement('button'); b.type='button'; b.textContent=name;
+    b.setAttribute('aria-pressed', name===currentHarness ? 'true':'false');
+    b.addEventListener('click', ()=>selectHarness(name));
+    mount.appendChild(b);
+  }
+})();
+
+function selectHarness(name){
+  currentHarness = name;
+  const h = HARNESSES[name];
+  $('harnessPick').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', b.textContent===name ? 'true':'false'));
+  $('ad-label').textContent = h.label;
+  $('ad-hint').textContent = h.hint;
+  $('ad-fn').textContent = h.fn + '(raw) → draft packet';
+  $('ad-in').value = h.sample;
+  $('ad-out').innerHTML = '<span class="empty">Press "Extract draft" to run the real '+h.fn+'() adapter over the transcript.</span>';
+  $('ad-load').disabled = true;
+  lastDraft = null;
+}
+
 function runAdapter(){
+  const h = HARNESSES[currentHarness];
+  const adapter = getAdapter(currentHarness);   // REAL registry lookup
+  if(!adapter){ $('ad-out').innerHTML = '<span class="empty">unknown harness: '+esc(currentHarness)+'</span>'; return; }
   let draft;
-  try { draft = fromClaudeCode($('ad-in').value, { agent: AGENT, from_session: 'sess_cc_1a2b' }); }
+  try { draft = adapter($('ad-in').value, { agent: AGENT, from_session: h.from }); }   // REAL adapter
   catch(e){ $('ad-out').innerHTML = '<span class="empty">parse error: '+esc(e.message)+'</span>'; return; }
   lastDraft = draft;
   const chips =
     `<div style="margin-bottom:12px">
+      <span class="draftchip">via <b>${esc(h.fn)}</b></span>
       <span class="draftchip">goal <b>${draft.goal? '✓ inferred':'— empty'}</b></span>
       <span class="draftchip">context <b>${draft.context? '✓ inferred':'— empty'}</b></span>
       <span class="draftchip">progress <b>${draft.progress.length} line${draft.progress.length===1?'':'s'}</b></span>
@@ -990,6 +1092,7 @@ function runAdapter(){
   $('ad-out').innerHTML = chips + '<pre class="json mono" style="max-height:340px">'+hjson(draft)+'</pre>';
   $('ad-load').disabled = false;
 }
+$('ad-in').value = SAMPLE_CLAUDE;
 $('ad-run').addEventListener('click', runAdapter);
 $('ad-in').addEventListener('input', ()=>{ $('ad-load').disabled = true; lastDraft = null; });
 $('ad-load').addEventListener('click', ()=>{
@@ -1008,8 +1111,40 @@ $('ad-load').addEventListener('click', ()=>{
   document.getElementById('playground').scrollIntoView({ behavior:'smooth', block:'start' });
 });
 
+// ---------- RESUME SHAPES (real resumeInto → each harness's opening shape) ----------
+const SHAPE_META = {
+  'system-prompt': "a system-prompt string — preamble + briefing to seed the resuming agent's system context.",
+  'user-turn':     "a first user-message string — preamble + briefing to open the resuming agent's conversation.",
+  'mcp-resource':  "an { uri, mimeType, text } object — the briefing as an MCP resource a harness reads on demand."
+};
+let currentShape = RESUME_SHAPES[0];
+(function buildShapePicker(){
+  const mount = $('shapePick');
+  for(const shape of RESUME_SHAPES){
+    const b=document.createElement('button'); b.type='button'; b.textContent=shape;
+    b.setAttribute('aria-pressed', shape===currentShape ? 'true':'false');
+    b.addEventListener('click', ()=>{
+      currentShape = shape;
+      mount.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x.textContent===shape ? 'true':'false'));
+      renderShape();
+    });
+    mount.appendChild(b);
+  }
+})();
+function renderShape(){
+  if(!currentPacket) return;
+  const out=$('shapeOut'), meta=$('shapeMeta');
+  let result;
+  try { result = resumeInto(currentPacket, currentShape); }   // REAL
+  catch(e){ out.textContent = 'error: '+e.message; meta.textContent=''; return; }
+  meta.innerHTML = "<span class=\"k\">resumeInto(packet, '"+esc(currentShape)+"')</span> → <b>"+
+    (typeof result==='string' ? 'string' : 'object')+"</b> · "+esc(SHAPE_META[currentShape]||'');
+  if(typeof result==='string'){ out.textContent = result; }
+  else { out.innerHTML = hjson(result); }
+}
+
 // ---------- source viewer (fetch the real files) ----------
-for (const f of ['completeness','resume','diff','schema','pack-browser','claude-code']) {
+for (const f of ['completeness','resume','diff','schema','pack-browser','claude-code','codex','cursor','antigravity','adapters','resume-into']) {
   fetch('./lib/'+f+'.js').then(r=>r.text()).then(t=>{ const el=$('src-'+f); if(el) el.textContent = t; }).catch(()=>{ const el=$('src-'+f); if(el) el.textContent='(source unavailable)'; });
 }
 
