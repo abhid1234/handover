@@ -12,6 +12,8 @@
 //   code — a stable machine-readable code from ERROR_CODES.
 //   message — one-line human explanation.
 
+import { computeId } from "./id.js";
+
 // The exact set of allowed top-level packet fields, in canonical order. `id` and
 // `version` are derived/optional; `goal` and `provenance` are the spine.
 export const PACKET_FIELDS = [
@@ -49,7 +51,45 @@ export const ERROR_CODES = {
   INVALID_INTEGER: "INVALID_INTEGER",
   INVALID_ISO8601: "INVALID_ISO8601",
   INVALID_SHA256: "INVALID_SHA256",
+  ID_MISMATCH: "ID_MISMATCH",
+  NOT_JSON: "NOT_JSON",
 };
+
+// firstNonJson(value) → { path, msg } for the first value that would not survive
+// a JSON round-trip (undefined, function, symbol, bigint, non-finite number, a
+// non-plain object like Date/Map/class instance, or a cycle), or null if the
+// whole structure is JSON-safe. A packet is a JSON document; a non-JSON value
+// would hash inconsistently, break rendering, or vanish on save/load.
+function firstNonJson(value, path, seen) {
+  const t = typeof value;
+  if (value === null || t === "string" || t === "boolean") return null;
+  if (t === "number") return Number.isFinite(value) ? null : { path, msg: "a non-finite number" };
+  if (t === "undefined" || t === "bigint" || t === "function" || t === "symbol") {
+    return { path, msg: `a ${t === "undefined" ? "undefined" : t} value` };
+  }
+  if (Array.isArray(value)) {
+    if (seen.has(value)) return { path, msg: "a circular reference" };
+    seen.add(value);
+    for (let i = 0; i < value.length; i++) {
+      const r = firstNonJson(value[i], `${path}[${i}]`, seen);
+      if (r) return r;
+    }
+    seen.delete(value);
+    return null;
+  }
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) {
+    return { path, msg: `a non-plain object (${(value.constructor && value.constructor.name) || "unknown"})` };
+  }
+  if (seen.has(value)) return { path, msg: "a circular reference" };
+  seen.add(value);
+  for (const k of Object.keys(value)) {
+    const r = firstNonJson(value[k], path ? `${path}.${k}` : k, seen);
+    if (r) return r;
+  }
+  seen.delete(value);
+  return null;
+}
 
 // Strict ISO-8601 UTC: YYYY-MM-DDTHH:MM:SS(.sss)?Z. The regex gates the format
 // (UTC `Z` only, no offsets); Date.parse gates real-calendar validity so
@@ -166,9 +206,22 @@ export function validatePacket(obj) {
     }
   }
 
+  // 4a. The whole packet must be JSON data (no undefined/function/Date/cycle/…).
+  // Run this BEFORE the id check so a cyclic structure can't make computeId throw.
+  const nonJson = firstNonJson(obj, "", new Set());
+  if (nonJson) {
+    errors.push(err(nonJson.path, ERROR_CODES.NOT_JSON, `value must be JSON-serializable, found ${nonJson.msg}`));
+  }
+
   // 4. Per-field type/shape (only for fields that are present).
-  if ("id" in obj && !isSha256Hex(obj.id)) {
-    errors.push(err("id", ERROR_CODES.INVALID_SHA256, "id must be a sha256 hex digest (64 hex chars)"));
+  if ("id" in obj) {
+    if (!isSha256Hex(obj.id)) {
+      errors.push(err("id", ERROR_CODES.INVALID_SHA256, "id must be a sha256 hex digest (64 hex chars)"));
+    } else if (!nonJson && obj.id !== computeId(obj)) {
+      // A well-formed digest that isn't the ACTUAL content hash means the packet
+      // was edited after its id was set — the id no longer proves integrity.
+      errors.push(err("id", ERROR_CODES.ID_MISMATCH, "id does not match the packet's content hash (packet modified after its id was set)"));
+    }
   }
 
   if ("version" in obj && (!Number.isInteger(obj.version) || obj.version < 1)) {

@@ -1,6 +1,6 @@
 {
   "name": "@avee1234/handover",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "The open format for handing off an in-progress agent task. A portable, harness-neutral JSON packet capturing everything a fresh agent needs to RESUME a task mid-flight — goal, context, progress, working state, next steps, open questions, and artifacts — so work can move between agents or harnesses without losing state. Zero dependencies, harness-neutral.",
   "type": "module",
   "main": "src/index.js",

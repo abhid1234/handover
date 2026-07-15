@@ -7,7 +7,7 @@
 // file or malformed JSON), and resolve the default location. Node's built-in
 // `fs`/`path` are the only "dependencies"; there are zero runtime packages.
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, renameSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 // defaultPacketPath(cwd) → the ONE place the default packet location is defined.
@@ -21,7 +21,19 @@ export function defaultPacketPath(cwd = process.cwd()) {
 // a packet is a single living document, not an append log.
 export function savePacket(path, packet) {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(packet, null, 2) + "\n");
+  const data = JSON.stringify(packet, null, 2) + "\n";
+  // Write to a temp sibling, then atomically rename over the destination. A
+  // direct writeFileSync truncates the target first, so a crash or disk-full
+  // mid-write would destroy the last valid handover; the temp+rename makes the
+  // replacement all-or-nothing.
+  const tmp = `${path}.handover-tmp-${process.pid}`;
+  try {
+    writeFileSync(tmp, data);
+    renameSync(tmp, path);
+  } catch (e) {
+    rmSync(tmp, { force: true });
+    throw e;
+  }
   return packet;
 }
 

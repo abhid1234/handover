@@ -1,3 +1,4 @@
+import { capProgress } from "./limit.js";
 // handover — Claude Code transcript adapter (a draft-packet surface).
 //
 // This turns a Claude Code `.jsonl` session transcript into a PARTIAL packet
@@ -91,7 +92,7 @@ export function fromClaudeCode(rawTranscript, opts = {}) {
   const draft = {
     goal,
     context,
-    progress: progress.slice(-max_progress),
+    progress: capProgress(progress, max_progress),
     state: {},
     next_steps: [],
     open_questions: [],

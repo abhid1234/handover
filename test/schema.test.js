@@ -9,13 +9,13 @@ import {
   REQUIRED_SECTIONS,
   ERROR_CODES,
 } from "../src/schema.js";
+import { computeId } from "../src/id.js";
 
 // A 64-hex sha256-shaped string, and a canonical fully-valid packet.
 const HEX = "a".repeat(64);
 
 function validPacket(overrides = {}) {
-  return {
-    id: HEX,
+  const base = {
     version: 1,
     goal: "ship the parser",
     context: "background the resumer must respect",
@@ -27,6 +27,10 @@ function validPacket(overrides = {}) {
     provenance: { handed_off_by: "claude", created: "2026-07-11T12:00:00Z" },
     ...overrides,
   };
+  // Set the REAL content-hash id so the packet passes the id-integrity check;
+  // tests exercising a bad/mismatched id override `id` explicitly.
+  if (!("id" in overrides)) base.id = computeId(base);
+  return base;
 }
 
 function codes(result) {

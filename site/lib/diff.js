@@ -42,12 +42,12 @@ function artifactPaths(v) {
 }
 
 // State keys whose JSON value differs between a and b (added, removed, or
-// changed), excluding `key_files` which is surfaced through the resume view.
+// changed). `key_files` is included like any other state key — previously it was
+// dropped, which silently hid every change to the files a resumer must read.
 function stateKeysChanged(a, b) {
   const sa = isPlainObject(a) ? a : {};
   const sb = isPlainObject(b) ? b : {};
   const keys = new Set([...Object.keys(sa), ...Object.keys(sb)]);
-  keys.delete("key_files");
   const changed = [];
   for (const k of keys) {
     if (JSON.stringify(sa[k]) !== JSON.stringify(sb[k])) changed.push(k);

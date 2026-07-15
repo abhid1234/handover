@@ -76,12 +76,13 @@ test("set semantics dedup duplicated entries", () => {
   assert.deepEqual(d.progress_added, ["b"]);
 });
 
-test("state_keys_changed lists added, removed and value-changed keys, sorted, excluding key_files", () => {
+test("state_keys_changed lists added, removed and value-changed keys, sorted, including key_files", () => {
   const a = packet({ state: { cursor: 1, mode: "a", key_files: ["x.js"] } });
   const b = packet({ state: { cursor: 2, phase: "z", key_files: ["y.js"] } });
   const d = diffPackets(a, b);
-  // cursor changed value, mode removed, phase added; key_files excluded.
-  assert.deepEqual(d.state_keys_changed, ["cursor", "mode", "phase"]);
+  // cursor changed value, mode removed, phase added; key_files changed value too
+  // (previously key_files was silently excluded, hiding the change).
+  assert.deepEqual(d.state_keys_changed, ["cursor", "key_files", "mode", "phase"]);
 });
 
 test("state_keys_changed ignores a same-valued key", () => {

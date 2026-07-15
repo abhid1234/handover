@@ -1,3 +1,4 @@
+import { capProgress } from "./limit.js";
 // handover — Google Antigravity session adapter (a draft-packet surface).
 //
 // This turns a Google Antigravity agent session — or an `AGENTS.md`-style task
@@ -176,7 +177,7 @@ export function fromAntigravity(rawSession, opts = {}) {
   const draft = {
     goal,
     context,
-    progress: progress.slice(-max_progress),
+    progress: capProgress(progress, max_progress),
     state: {},
     next_steps: [],
     open_questions: [],

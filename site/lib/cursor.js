@@ -1,3 +1,4 @@
+import { capProgress } from "./limit.js";
 // handover — Cursor session adapter (a draft-packet surface).
 //
 // This turns a Cursor chat session (or a rules-style scratchpad) into a PARTIAL
@@ -169,7 +170,7 @@ export function fromCursor(rawSession, opts = {}) {
   const draft = {
     goal,
     context,
-    progress: progress.slice(-max_progress),
+    progress: capProgress(progress, max_progress),
     state: {},
     next_steps: [],
     open_questions: [],

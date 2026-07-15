@@ -1,3 +1,4 @@
+import { capProgress } from "./limit.js";
 // handover — OpenAI Codex CLI rollout adapter (a draft-packet surface).
 //
 // This turns a Codex CLI `.jsonl` rollout into a PARTIAL packet DRAFT: a starting
@@ -105,7 +106,7 @@ export function fromCodex(rawRollout, opts = {}) {
   const draft = {
     goal,
     context,
-    progress: progress.slice(-max_progress),
+    progress: capProgress(progress, max_progress),
     state: {},
     next_steps: [],
     open_questions: [],
